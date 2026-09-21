@@ -1,0 +1,3 @@
+timestamp_utc,country,forecast_date,forecast_30d_revenue,baseline_30d_revenue,model_name,model_version,runtime_ms
+2026-09-21T05:44:31.758848+00:00,all,2019-09-01,470774.39,132011.42,random_forest,1.0,9920.57
+2026-09-21T05:44:42.713307+00:00,united_kingdom,2019-09-01,445464.97,117078.76,random_forest,1.0,10854.41

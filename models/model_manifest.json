@@ -1,0 +1,96 @@
+{
+  "model_version": "1.0",
+  "forecast_horizon_days": 30,
+  "training_data_start": "2017-11-28",
+  "training_data_end": "2019-07-31",
+  "countries": {
+    "all": {
+      "display_name": "All Countries",
+      "artifact": "all.joblib",
+      "model_name": "random_forest",
+      "validation_rmse": 101007.2534724116,
+      "validation_mae": 88759.95005281827,
+      "baseline_rmse": 118433.7946252994
+    },
+    "united_kingdom": {
+      "display_name": "United Kingdom",
+      "artifact": "united_kingdom.joblib",
+      "model_name": "random_forest",
+      "validation_rmse": 116346.63844195806,
+      "validation_mae": 104566.72298785699,
+      "baseline_rmse": 115959.01372604862
+    },
+    "eire": {
+      "display_name": "EIRE",
+      "artifact": "eire.joblib",
+      "model_name": "random_forest",
+      "validation_rmse": 4680.508474457348,
+      "validation_mae": 3668.0320307564516,
+      "baseline_rmse": 5705.003219224928
+    },
+    "germany": {
+      "display_name": "Germany",
+      "artifact": "germany.joblib",
+      "model_name": "random_forest",
+      "validation_rmse": 1074.7893168709113,
+      "validation_mae": 844.3643911623114,
+      "baseline_rmse": 1368.6434159498988
+    },
+    "france": {
+      "display_name": "France",
+      "artifact": "france.joblib",
+      "model_name": "gradient_boosting",
+      "validation_rmse": 1536.8364130307045,
+      "validation_mae": 1261.3214172079568,
+      "baseline_rmse": 1554.4920901259236
+    },
+    "norway": {
+      "display_name": "Norway",
+      "artifact": "norway.joblib",
+      "model_name": "gradient_boosting",
+      "validation_rmse": 8624.706051547293,
+      "validation_mae": 7739.371115869955,
+      "baseline_rmse": 11742.475252596469
+    },
+    "spain": {
+      "display_name": "Spain",
+      "artifact": "spain.joblib",
+      "model_name": "gradient_boosting",
+      "validation_rmse": 766.720531819298,
+      "validation_mae": 591.0148546633206,
+      "baseline_rmse": 1002.1179869007639
+    },
+    "hong_kong": {
+      "display_name": "Hong Kong",
+      "artifact": "hong_kong.joblib",
+      "model_name": "gradient_boosting",
+      "validation_rmse": 2472.7387925743615,
+      "validation_mae": 2013.047975418511,
+      "baseline_rmse": 2702.6955204870546
+    },
+    "portugal": {
+      "display_name": "Portugal",
+      "artifact": "portugal.joblib",
+      "model_name": "linear_regression",
+      "validation_rmse": 1245.6447102606633,
+      "validation_mae": 843.8974559102335,
+      "baseline_rmse": 2294.6832707585213
+    },
+    "singapore": {
+      "display_name": "Singapore",
+      "artifact": "singapore.joblib",
+      "model_name": "gradient_boosting",
+      "validation_rmse": 3772.8819516305325,
+      "validation_mae": 2817.5904786922993,
+      "baseline_rmse": 5103.330807401033
+    },
+    "netherlands": {
+      "display_name": "Netherlands",
+      "artifact": "netherlands.joblib",
+      "model_name": "gradient_boosting",
+      "validation_rmse": 333.72477594806185,
+      "validation_mae": 289.5834116820723,
+      "baseline_rmse": 418.0861935171478
+    }
+  }
+}

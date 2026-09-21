@@ -1,0 +1,14 @@
+{
+  "production_start": "2019-08-01",
+  "production_end": "2019-12-06",
+  "last_fully_observed_forecast_start": "2019-11-07",
+  "countries_evaluated": 11,
+  "all_countries": {
+    "model_rmse": 167430.42612175518,
+    "model_mae": 139701.19654643146,
+    "baseline_rmse": 64955.9764747347,
+    "baseline_mae": 59852.84286868686,
+    "rmse_improvement_pct": -157.7598478361378,
+    "target_mean_shift_pct": 20.94479040207556
+  }
+}

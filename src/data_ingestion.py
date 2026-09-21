@@ -1,281 +1,169 @@
-#!/usr/bin/env python
-"""
-Data ingestion module for the IBM AI Enterprise Workflow Capstone
-Handles reading JSON files from multiple sources and preparing feature matrices
-"""
+"""Data ingestion and time-series preparation for the AAVAIL capstone."""
+from __future__ import annotations
 
-import os
 import re
-import shutil
-from collections import defaultdict
-from datetime import datetime
+from pathlib import Path
+from typing import Iterable
+
 import numpy as np
 import pandas as pd
-import logging
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+CANONICAL_COLUMNS = [
+    "country", "customer_id", "day", "invoice", "month",
+    "price", "stream_id", "times_viewed", "year",
+]
+COLUMN_ALIASES = {
+    "StreamID": "stream_id",
+    "TimesViewed": "times_viewed",
+    "total_price": "price",
+}
 
-CORRECT_COLUMNS = ['country', 'customer_id', 'day', 'invoice', 'month',
-                   'price', 'stream_id', 'times_viewed', 'year']
+
+def normalize_country_key(country: str) -> str:
+    """Return a stable URL/model-safe country key."""
+    key = re.sub(r"[^a-z0-9]+", "_", str(country).strip().lower()).strip("_")
+    return key or "unknown"
 
 
-def fetch_data(data_dir):
+def _json_files(data_dir: str | Path) -> list[Path]:
+    path = Path(data_dir)
+    if not path.is_dir():
+        raise FileNotFoundError(f"Data directory does not exist: {path}")
+    files = sorted(path.glob("*.json"))
+    if not files:
+        raise ValueError(f"No JSON files found in data directory: {path}")
+    return files
+
+
+def fetch_data(data_dir: str | Path) -> pd.DataFrame:
+    """Load and normalize all JSON transaction files from a directory.
+
+    The source files contain several historical column-name variants. This
+    function normalizes those variants, validates required fields, cleans
+    invoice identifiers, constructs invoice_date, sorts the records, and
+    returns one DataFrame.
     """
-    Load all JSON formatted files from a directory into a single DataFrame.
-    
-    Business Context:
-    - Aggregates invoice data from multiple files
-    - Handles inconsistent column naming across different months
-    - Cleans invoice IDs by removing non-numeric characters
-    - Creates uniform datetime columns for time-series analysis
-    
-    Parameters:
-    -----------
-    data_dir : str
-        Path to directory containing JSON files
-        
-    Returns:
-    --------
-    df : pandas.DataFrame
-        Consolidated DataFrame with standardized columns and cleaned data
-        
-    Raises:
-    -------
-    Exception
-        If data_dir doesn't exist or is empty
-        If columns don't match expected schema after standardization
-    """
-    
-    # Input validation
-    if not os.path.isdir(data_dir):
-        logger.error(f"Directory does not exist: {data_dir}")
-        raise Exception("specified data dir does not exist")
-    
-    files = os.listdir(data_dir)
-    if not len(files) > 0:
-        logger.error(f"Directory is empty: {data_dir}")
-        raise Exception("specified data dir does not contain any files")
+    frames: list[pd.DataFrame] = []
+    for file_path in _json_files(data_dir):
+        frame = pd.read_json(file_path)
+        frame = frame.rename(columns=COLUMN_ALIASES)
+        missing = sorted(set(CANONICAL_COLUMNS) - set(frame.columns))
+        unexpected = sorted(set(frame.columns) - set(CANONICAL_COLUMNS))
+        if missing or unexpected:
+            raise ValueError(
+                f"Schema mismatch in {file_path.name}; missing={missing}, unexpected={unexpected}"
+            )
+        frames.append(frame[CANONICAL_COLUMNS].copy())
 
-    # Find all JSON files
-    file_list = [os.path.join(data_dir, f) for f in files if re.search(r"\.json$", f)]
-    if not file_list:
-        logger.error(f"No JSON files found in: {data_dir}")
-        raise Exception("No JSON files found in specified directory")
-    
-    logger.info(f"Found {len(file_list)} JSON files to process")
+    df = pd.concat(frames, ignore_index=True)
 
-    # Read data into temporary structure
-    all_months = {}
-    for file_name in file_list:
-        try:
-            df = pd.read_json(file_name)
-            file_basename = os.path.split(file_name)[-1]
-            all_months[file_basename] = df
-            logger.info(f"Successfully loaded {file_basename}: {df.shape[0]} records")
-        except Exception as e:
-            logger.warning(f"Error reading {file_name}: {e}")
-            continue
+    for column in ["year", "month", "day", "price", "times_viewed"]:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+    invalid_critical = df[["year", "month", "day", "price", "country"]].isna().any(axis=1)
+    if invalid_critical.any():
+        raise ValueError(f"Found {int(invalid_critical.sum())} rows with invalid critical fields")
 
-    if not all_months:
-        raise Exception("No JSON files could be successfully loaded")
-
-    # Standardize column names
-    for f, df in all_months.items():
-        cols = set(df.columns.tolist())
-        
-        # Handle inconsistent column naming
-        if 'StreamID' in cols:
-            df.rename(columns={'StreamID': 'stream_id'}, inplace=True)
-        if 'TimesViewed' in cols:
-            df.rename(columns={'TimesViewed': 'times_viewed'}, inplace=True)
-        if 'total_price' in cols:
-            df.rename(columns={'total_price': 'price'}, inplace=True)
-
-        # Validate columns
-        cols = set(df.columns.tolist())
-        if not cols == set(CORRECT_COLUMNS):
-            logger.error(f"Column mismatch in {f}. Found: {sorted(cols)}, Expected: {sorted(CORRECT_COLUMNS)}")
-            raise Exception(f"columns name could not be matched to correct cols in {f}")
-
-    # Concatenate all data
-    df = pd.concat(list(all_months.values()), sort=True, ignore_index=True)
-    logger.info(f"Concatenated data shape: {df.shape}")
-
-    # Create unified date column
-    years = df['year'].values
-    months = df['month'].values
-    days = df['day'].values
-    dates = [f"{years[i]}-{str(months[i]).zfill(2)}-{str(days[i]).zfill(2)}" 
-             for i in range(df.shape[0])]
-    df['invoice_date'] = np.array(dates, dtype='datetime64[D]')
-    
-    # Clean invoice IDs (remove letters)
-    df['invoice'] = [re.sub(r"\D+", "", str(i)) for i in df['invoice'].values]
-    
-    # Sort by date and reset index
-    df.sort_values(by='invoice_date', inplace=True)
-    df.reset_index(drop=True, inplace=True)
-    
-    logger.info(f"Data preparation complete. Date range: {df['invoice_date'].min()} to {df['invoice_date'].max()}")
-    
+    df["times_viewed"] = df["times_viewed"].fillna(0)
+    df["invoice"] = (
+        df["invoice"].astype(str).str.replace(r"\D+", "", regex=True).replace("", np.nan)
+    )
+    df["invoice_date"] = pd.to_datetime(
+        dict(year=df["year"].astype(int), month=df["month"].astype(int), day=df["day"].astype(int)),
+        errors="raise",
+    )
+    df["country"] = df["country"].astype(str).str.strip()
+    df = df.sort_values("invoice_date").reset_index(drop=True)
     return df
 
 
-def convert_to_ts(df_orig, country=None):
-    """
-    Convert transactional data to time-series format by aggregating daily metrics.
-    
-    Business Context:
-    - Aggregates daily transactions into meaningful business metrics
-    - Handles missing days by creating complete date range
-    - Computes revenue (target variable) and feature metrics
-    - Enables time-series analysis and forecasting
-    
-    Parameters:
-    -----------
-    df_orig : pandas.DataFrame
-        Original transaction-level DataFrame from fetch_data()
-    country : str, optional
-        Country code to filter data. If None, uses all data.
-        
-    Returns:
-    --------
-    df_time : pandas.DataFrame
-        Time-series DataFrame with daily aggregations
-    """
-    
-    if country:
-        if country not in np.unique(df_orig['country'].values):
-            raise Exception(f"country '{country}' not found in data")
-        
-        mask = df_orig['country'] == country
-        df = df_orig[mask].copy()
-        logger.info(f"Filtered to country: {country}, {df.shape[0]} records")
+def combine_data_dirs(data_dirs: Iterable[str | Path]) -> pd.DataFrame:
+    """Load multiple transaction directories into a single deduplicated frame."""
+    frames = [fetch_data(directory) for directory in data_dirs]
+    df = pd.concat(frames, ignore_index=True)
+    # Files are month-partitioned, but deduplication makes the helper safe if
+    # overlapping directories are supplied.
+    subset = ["country", "customer_id", "invoice", "stream_id", "invoice_date", "price", "times_viewed"]
+    df = df.drop_duplicates(subset=subset).sort_values("invoice_date").reset_index(drop=True)
+    return df
+
+
+def top_revenue_countries(df: pd.DataFrame, n: int = 10) -> pd.DataFrame:
+    """Return the top n countries ranked by total historical revenue."""
+    table = (
+        df.groupby("country", as_index=False)["price"]
+        .sum()
+        .rename(columns={"price": "total_revenue"})
+        .sort_values("total_revenue", ascending=False)
+        .head(n)
+        .reset_index(drop=True)
+    )
+    table["country_key"] = table["country"].map(normalize_country_key)
+    return table[["country", "country_key", "total_revenue"]]
+
+
+def convert_to_ts(df_orig: pd.DataFrame, country: str | None = None) -> pd.DataFrame:
+    """Aggregate transactions to a complete daily time series."""
+    if country is not None:
+        available = set(df_orig["country"].unique())
+        if country not in available:
+            raise ValueError(f"Country not found: {country}")
+        df = df_orig.loc[df_orig["country"] == country]
     else:
-        df = df_orig.copy()
+        df = df_orig
 
-    # Create complete date range (no missing days)
-    df_dates = df['invoice_date'].values.astype('datetime64[D]')
-    start_date = df_dates.min()
-    end_date = df_dates.max()
-    days = np.arange(start_date, end_date, dtype='datetime64[D]')
-    
-    logger.info(f"Creating time-series from {start_date} to {end_date} ({len(days)} days)")
+    if df.empty:
+        raise ValueError("No records available for requested time series")
 
-    # Aggregate metrics by day
-    purchases = np.array([np.where(df_dates == day)[0].size for day in days])
-    invoices = [np.unique(df[df_dates == day]['invoice'].values).size for day in days]
-    streams = [np.unique(df[df_dates == day]['stream_id'].values).size for day in days]
-    views = [df[df_dates == day]['times_viewed'].values.sum() for day in days]
-    revenue = [df[df_dates == day]['price'].values.sum() for day in days]
-    year_month = ["-".join(re.split("-", str(day))[:2]) for day in days]
-
-    df_time = pd.DataFrame({
-        'date': days,
-        'purchases': purchases,
-        'unique_invoices': invoices,
-        'unique_streams': streams,
-        'total_views': views,
-        'year_month': year_month,
-        'revenue': revenue
-    })
-    
-    logger.info(f"Time-series shape: {df_time.shape}")
-    
-    return df_time
+    grouped = (
+        df.groupby("invoice_date")
+        .agg(
+            purchases=("price", "size"),
+            unique_invoices=("invoice", "nunique"),
+            unique_streams=("stream_id", "nunique"),
+            total_views=("times_viewed", "sum"),
+            revenue=("price", "sum"),
+        )
+        .sort_index()
+    )
+    full_index = pd.date_range(grouped.index.min(), grouped.index.max(), freq="D")
+    grouped = grouped.reindex(full_index, fill_value=0)
+    grouped.index.name = "date"
+    result = grouped.reset_index()
+    result["year_month"] = result["date"].dt.strftime("%Y-%m")
+    return result[[
+        "date", "purchases", "unique_invoices", "unique_streams",
+        "total_views", "year_month", "revenue",
+    ]]
 
 
-def fetch_ts(data_dir, clean=False):
+def build_time_series(df: pd.DataFrame, top_n: int = 10) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
+    """Create aggregate and top-country daily series.
+
+    Returns
+    -------
+    series : dict
+        Keys are ``all`` plus normalized country keys.
+    country_map : dict
+        Maps each key to the original display name.
     """
-    Load time-series data with caching to CSV for fast retrieval.
-    
-    Parameters:
-    -----------
-    data_dir : str
-        Path to directory containing raw JSON files
-    clean : bool
-        If True, recreate time-series files from raw data
-        
-    Returns:
-    --------
-    dict
-        Dictionary with keys for 'all' data and top-10 countries
-    """
-    
-    ts_data_dir = os.path.join(data_dir, "ts-data")
-    
-    if clean:
-        if os.path.exists(ts_data_dir):
-            shutil.rmtree(ts_data_dir)
-            logger.info(f"Removed cached time-series data")
-    
-    if not os.path.exists(ts_data_dir):
-        os.mkdir(ts_data_dir)
-
-    # Check for cached files
-    if len(os.listdir(ts_data_dir)) > 0:
-        logger.info("Loading time-series data from cache")
-        return {
-            re.sub(r"\.csv$", "", cf)[3:]: pd.read_csv(os.path.join(ts_data_dir, cf))
-            for cf in os.listdir(ts_data_dir)
-        }
-
-    # Process raw data
-    logger.info("Processing raw data into time-series format")
-    df = fetch_data(data_dir)
-
-    # Find top 10 countries by revenue
-    table = pd.pivot_table(df, index='country', values="price", aggfunc='sum')
-    table.columns = ['total_revenue']
-    table.sort_values(by='total_revenue', inplace=True, ascending=False)
-    top_ten_countries = np.array(list(table.index))[:10]
-    
-    logger.info(f"Top 10 countries by revenue: {list(top_ten_countries)}")
-
-    # Create time-series for all data and top countries
-    dfs = {}
-    
-    # All data
-    ts_all = convert_to_ts(df)
-    ts_all.to_csv(os.path.join(ts_data_dir, "ts-all.csv"), index=False)
-    dfs['all'] = ts_all
-    
-    # By country
-    for country in top_ten_countries:
-        country_id = re.sub(r"\s+", "_", country.lower())
-        file_name = os.path.join(ts_data_dir, f"ts-{country_id}.csv")
-        ts_country = convert_to_ts(df, country=country)
-        ts_country.to_csv(file_name, index=False)
-        dfs[country_id] = ts_country
-    
-    logger.info(f"Created {len(dfs)} time-series datasets")
-    
-    return dfs
+    ranking = top_revenue_countries(df, n=top_n)
+    series = {"all": convert_to_ts(df)}
+    country_map = {"all": "All Countries"}
+    for row in ranking.itertuples(index=False):
+        series[row.country_key] = convert_to_ts(df, country=row.country)
+        country_map[row.country_key] = row.country
+    return series, country_map
 
 
-def get_data_summary(df):
-    """
-    Generate summary statistics of the data.
-    
-    Parameters:
-    -----------
-    df : pandas.DataFrame
-        Original transaction-level DataFrame
-        
-    Returns:
-    --------
-    dict
-        Summary statistics
-    """
-    
+def data_summary(df: pd.DataFrame) -> dict:
+    """Return a concise set of data-quality and coverage metrics."""
     return {
-        'total_records': len(df),
-        'date_range': (df['invoice_date'].min(), df['invoice_date'].max()),
-        'unique_countries': df['country'].nunique(),
-        'unique_customers': df['customer_id'].nunique(),
-        'unique_streams': df['stream_id'].nunique(),
-        'total_revenue': df['price'].sum(),
-        'avg_transaction_value': df['price'].mean()
+        "records": int(len(df)),
+        "start_date": str(df["invoice_date"].min().date()),
+        "end_date": str(df["invoice_date"].max().date()),
+        "countries": int(df["country"].nunique()),
+        "invoices": int(df["invoice"].nunique(dropna=True)),
+        "total_revenue": float(df["price"].sum()),
+        "missing_customer_id": int(df["customer_id"].isna().sum()),
+        "missing_invoice": int(df["invoice"].isna().sum()),
     }

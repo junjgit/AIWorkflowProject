@@ -1,0 +1,11 @@
+{
+  "records": 815011,
+  "start_date": "2017-11-28",
+  "end_date": "2019-07-31",
+  "countries": 43,
+  "invoices": 42646,
+  "total_revenue": 3914197.3660000004,
+  "missing_customer_id": 189762,
+  "missing_invoice": 0,
+  "daily_views_revenue_correlation": 0.4815511354439469
+}

@@ -1,164 +1,157 @@
-# IBM AI Enterprise Workflow Capstone
-Files for the IBM AI Enterprise Workflow Capstone project. 
+# AAVAIL 30-Day Revenue Forecasting Service
 
-## Part 1
+This repository contains the final IBM AI Enterprise Workflow Capstone submission for the AAVAIL revenue forecasting case study.
 
-### Case study part 1
+The business requirement is to forecast revenue for the next 30 days for either all countries combined or a specific high-revenue country. The project includes automated data ingestion, exploratory analysis, multiple-model comparison, model training and serialization, a Flask API, unit tests, Docker packaging, prediction/training logs, and post-production performance monitoring against held-out production data.
 
-At this point in the project, and in any data science project really, it is best to loosly organize your code as libraries and scripts.  Jupyter notebooks are a convenient and powerful tool, but we have mentioned several times that they are not a good place for source code to live.  If you decide to use a notebook for this part, we recommend that it is used to run functions that live within a [python module](https://docs.python.org/3/tutorial/modules.html).
+## Repository structure
 
-### Deliverable goals
+```text
+AIWorkflowProject/
+├── api/                    Flask application
+├── cs-train/               Training transaction JSON files
+├── cs-production/          Held-out production transaction JSON files
+├── models/                 Trained model artifacts and manifest
+├── reports/
+│   ├── figures/            EDA and monitoring visualizations
+│   └── metrics/            Reproducible evaluation outputs
+├── scripts/                EDA, training, and post-production scripts
+├── src/                    Reusable ingestion, feature, model, logging, monitoring code
+├── tests/                  Unit tests for data, model, logging, and API
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── run_tests.py
+```
 
-Overall this part of the case study is meant to tell the story of the data by investigating the relationship between the data and the business opportunity.
+## Business objective
 
-> (1) Assimilate the business scenario and articulate testable hypotheses.
+AAVAIL managers need a repeatable service that forecasts the following 30 days of revenue. Forecasts must be available for the full business and for the ten countries with the most historical revenue. The service is designed around a country and a forecast-start date rather than a raw feature vector.
 
-Take what you have read from the stories and from what you know about the business scenario and, in your own words, carefully re-state the business opportunity.  Given the stated opportunity, enumerate the testable hypotheses.
+## Forecast design
 
-> (2) State the ideal data to address the business opportunity and clarify the rationale for needing specific data.
+For a requested forecast date, features use only information available before that date. The target is total revenue from the forecast date through the following 29 days.
 
-Note that this step is carried out **before you read in the data**.  It helps clarify exactly what your are looking for in the data and it helps provide context for what the feature matrix and targets will look like.
+Historical features include trailing 7-, 14-, 30-, and 70-day revenue, the comparable 30-day window from the previous year, recent invoice/view/purchase activity, and calendar seasonality. The trailing 30-day revenue is retained as a transparent baseline.
 
-3. Create a python script to extract relevant data from multiple data sources, automating the process of data ingestion.
+Model selection compares:
 
-From within a Python module there should be a function that reads in the data, attempts to catch common input errors and returns a feature matrix (NumPy array or Pandas DataFrame) that will subsequently be used as a starting point for EDA and modeling.
+- Linear regression
+- Random forest regression
+- Gradient boosting regression
+- Trailing 30-day baseline
 
-4. Investigate the relationship between the relevant data, the target and the business metric.
+Machine-learning candidates are compared with forward-chaining time-series validation. The best machine-learning candidate is then re-trained on all available training observations for each country.
 
-Using the feature matrix and the tools abvailable to you through EDA spend some time to get to know the data.
+## Reproduce the submission
 
-5. Articulate your findings using a deliverable with visualizations.
+Create an environment and install dependencies:
 
-Summarize what you have learned in your investigations using visualizations.
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-### Hints
+Generate the exploratory analysis:
 
-* The JSON files may not contain uniformly named features. Be sure to account for this in your data ingestion function.
-* Some of the invoice ids (`invoice`) have letters that can be removed to improve matching.
-* One common way to ready time-series data for modeling is to aggregate the transactions by day. Getting the data into this form will help you prepare for part 2.
-* If you have not worked with time-series or time-stamped data before the following two links can be useful.
+```bash
+python scripts/generate_eda.py
+```
 
-  * [NumPy datetime](https://docs.scipy.org/doc/numpy/reference/arrays.datetime.html)
-  * [Pandas time-series](https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html)
-  * [matplotlib time-series plot](https://matplotlib.org/3.1.1/gallery/text_labels_and_annotations/date.html)
+Train all models:
 
+```bash
+python scripts/train_models.py
+```
 
-## Part 2
+Run post-production monitoring against the held-out production files:
 
-### Case study part 2
+```bash
+python scripts/post_production.py
+```
 
-Time-series analysis is a subject area that has many varied methods and a great potential for customized solutions.
-We cannot cover the breadth and depth of this important area of data science in a single case study. We do 
-however want to use this as a learning opportunity if time-series analysis is new to you.  For those of you who are seasoned 
-practitioners in this area, it may be a useful time to hone your skills or try out a more advanced technique like 
-Gaussian processes.  The reference materials for more advanced approaches to time-series analysis will occur in their own section
-below. If this is your first encounter with time-series data we suggest that that you begin with the supervised learning
-approach before trying out the other possible methods. 
+Run all unit tests with one command:
 
-## Deliverable goals
+```bash
+python run_tests.py
+```
 
-1. State the different modeling approaches that you will compare to address the business opportunity.
-2. Iterate on your suite of possible models by modifying data transformations, pipeline architectures, hyperparameters 
-and other relevant factors.
-3. Re-train your model on all of the data using the selected approach and prepare it for deployment.
-4. Articulate your findings in a summary report.
+## Run the Flask API
 
-## On time-series analysis
+```bash
+python -m api.app
+```
 
-We have used TensorFlow, scikit-learn, and Spark ML as the main ways to implement models.  Time-series analysis 
-has been around a long time and there are a number of specialized packages and software to help facilitate model 
-implementation.  In the case of our business opportunity, it is required that we 
-*predict the next point* or determine a reasonable value for next month's revenue.  If we only had revenue, we could 
-engineer features with revenue for the previous day, previous week, previous month and previous three months, for example.
-This provides features that machine learning models such as random forests or boosting could use to 
-capture the underlying patterns or trends in the the data. You will likely spend some time optimizing this feature
-engineering task on a case-by-case basis. 
+The default service URL is `http://localhost:8080`.
 
-Predicting the next element in a time-series is in line with the other machine learning tasks that we have encountered in
-this specialization.  One caveat to this approach is that sometimes we wish to project further into the future. Although,
-it is not a specific request of management in the case of this business opportunity, you may want to consider forecasting 
-multiple points into the future, say three months or more. To do this, you have two main categories of methods: 'recursive forecasting' and 'ensemble forecasting'.
+### Endpoints
 
-In recursive forecasting, you will append your predictions to the feature matrix and *roll* forward until you get to the 
-desired number of forecasts in the future.  In the ensemble approach, you will use separate models for each point.  It 
-is possible to use a hybridization of these two ideas as well.  If you wish to take your forecasting model to the next
-level, try to project several months into the future with one or both of these ideas.
+- `GET /health` - service and model availability
+- `POST /train` - re-train all aggregate and country models
+- `POST /predict` - 30-day revenue forecast for a country/date
+- `GET /logfile?type=predict` - prediction log
+- `GET /logfile?type=train` - training log
+- `GET /metrics` - latest post-production monitoring summary
 
-Also, be aware that the assumptions of line regression are generally invalidated when using time-series data because of auto-correlation.  The engineered features are derived mostly from revenue which often means that there is a high degree of correlation.  You will get further with more sophisticated models to in combination with smartly engineered features. 
+Example prediction request:
 
+```bash
+curl -X POST http://localhost:8080/predict \
+  -H "Content-Type: application/json" \
+  -d '{"country":"united_kingdom","date":"2019-09-01"}'
+```
 
-## Commonly used time-series tools
+`country` may be `all`, a normalized country key such as `united_kingdom`, or the matching human-readable country name.
 
-  * [statsmodels time-series package](https://www.statsmodels.org/dev/tsa.html) - one of the most commonly used 
-  time-series analysis packages in Python.  There are a suite of models including autoregressive models (AR), 
-  vector autoregressive models (VAR), univariate autoregressive moving average models (ARMA) and more.
-  * [Tensorflow time series tutorial](https://www.tensorflow.org/tutorials/structured_data/time_series)
-  * [Prophet](https://research.fb.com/prophet-forecasting-at-scale/)
-  
-## More advanced methods for time-series analysis
+## Docker
 
-  * [PyWavelets](https://pywavelets.readthedocs.io/en/latest/)
-  * [Bayesian Methods for time-series](https://docs.pymc.io/api/distributions/timeseries.html)
-  * [Gaussian process regression](https://scikit-learn.org/stable/auto_examples/gaussian_process/plot_gpr_noisy_targets.html)
+Build and run the same application in a container:
 
-## Working with time-series data
+```bash
+docker build -t aavail-revenue-forecast .
+docker run --rm -p 8080:8080 aavail-revenue-forecast
+```
 
-  * [scikit-learn MultiOutputRegressor](https://scikit-learn.org/stable/modules/generated/sklearn.multioutput.MultiOutputRegressor.html)
-  * [NumPy datetime](https://docs.scipy.org/doc/numpy/reference/arrays.datetime.html)
-  * [Pandas time-series](https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html)
-  * [matplotlib time-series plot](https://matplotlib.org/3.1.1/gallery/text_labels_and_annotations/date.html)
-  * [scikit-learn time-series train-test split](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html)
+Run the test suite inside the image with:
 
-## Additional materials
+```bash
+docker run --rm aavail-revenue-forecast python run_tests.py
+```
 
-  * [Intro paper to Gaussian Processes in time-series](https://royalsocietypublishing.org/doi/full/10.1098/rsta.2011.0550)
-  * [Paper for using wavelets to aid time-series forecasts](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0142064)
-  
-## Part 3
+Or:
 
-## Outline
+```bash
+docker compose up --build
+```
 
-1. Build a draft version of an API with train, predict, and logfile endpoints.
-2. Using Docker, bundle your API, model, and unit tests.
-3. Using test-driven development iterate on your API in a way that anticipates scale, load, and drift.
-4. Create a post-production analysis script that investigates the relationship between model performance and the business metric.
-5. Articulate your summarized findings in a final report.
+The Docker build context contains the API, source modules, model artifacts, unit tests, data required by the submission, and monitoring/report outputs.
 
+## Continuous integration
 
-At a higher level you are being asked to:
+`.github/workflows/ci.yml` runs on GitHub pushes and pull requests. It installs the pinned Python dependencies, runs the complete unit-test suite, and builds the Docker image. A green workflow therefore validates both the Python submission and the container definition in the repository environment used for peer review.
 
-1. Ready your model for deployment
-2. Query your API with new data and test your monitoring tools
-3. Compare your results to the gold standard
+## Peer-review checklist
 
+| Peer-review requirement | Evidence in this repository |
+|---|---|
+| Unit tests for API | `tests/test_api.py` |
+| Unit tests for model | `tests/test_model.py` |
+| Unit tests for logging | `tests/test_logging.py` |
+| All tests run from one script | `python run_tests.py` |
+| Mechanism to monitor performance | `src/monitoring.py`, `scripts/post_production.py`, `GET /metrics` |
+| Test read/write isolation | Tests use temporary directories supplied to logging/model functions |
+| API predicts country and all-country revenue | `POST /predict`; model manifest includes `all` plus top countries |
+| Automated data ingestion | `src/data_ingestion.py` |
+| Multiple models compared | `src/modeling.py`, `reports/metrics/model_comparison.csv` |
+| EDA uses visualizations | `scripts/generate_eda.py`, `reports/figures/` |
+| Containerized application definition | `Dockerfile`, `docker-compose.yml` |
+| Model vs baseline visualization | `reports/figures/production_model_vs_baseline_all.png` |
 
-To **ready your model for deployment** you will be required to prepare you model in a way that the Flask API can both 
-train and predict.  There are some differences when you compare this model to most of those we have discussed 
-throughout this specialization.  When it comes to training one solution is that the model train script simply uses all
-files in a given directory.  This way you could set your model up to be re-trained at regular intervals with little 
-overhead.  
+## Reports
 
-Prediction in the case of this model requires a little more thought.  You are not simply passing a query corresponding
-to a row in a feature matrix, because this business opportunity requires that the API takes a country name and a date.
-There are many ways to accommodate these requirements.  You model may simply save the forecasts for a range of dates,
-then the 'predict' function serves to looks up the specified 30 day revenue prediction.  You model could also transform
-the target date into an appropriate input vector that is then used as input for a trained model.
+- `reports/Part1_Data_Investigation.md`
+- `reports/Part2_Model_Iteration.md`
+- `reports/Part3_Final_Report.md`
 
-You might be tempted to setup the predict function to work only with the latest date, which would be appropriate in 
-some circumstances, but in this case we are building a tool to fit the specific needs of individuals.  Some people in
-leadership at AAVAIL make projections at the end of the month and others do this on the 15th so the predict function
-needs to work for all of the end users.
-
-In the case of this project you can safely assume that there are only a few individuals that will be active users of 
-the model so it may not be worth the effort to optimize for speed when it comes to prediction or training.  The important
-thing is to arrive at a working solution.
-
-Once all of your tests pass and your model is being served via Docker you will need to **query the API**.  One suggestion
-for this part is to use a script to simulate the process.  You may want to start with fresh log files and then for every
-new day make a prediction with the consideration that you have not yet seen the rest of the future data.  To may the 
-process more realistic you could 're-train' your model say every week or nightly.  At a minimum you should have predictions
-for each day when you are finished and you should compare them to the known values.
-
-To monitor performance there are several plots that could be made.  The time-series plot where X are the day intervals
-and Y is the 30 day revenue (projected and known) can be particularly useful here.  Because we obtain labels for y the 
-performance of your model can be monitored by comparing predicted and known values.
+Each report is backed by the generated CSV/JSON outputs and figures in `reports/metrics` and `reports/figures`.
